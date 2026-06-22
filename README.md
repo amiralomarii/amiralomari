@@ -1,7 +1,7 @@
 # Amir Majdi Alomari | AI Developer & Technology Specialist
 
 [![Website](https://img.shields.io/badge/Website-amiralomari.xyz-blue?style=flat-square&logo=googlesites)](https://amiralomari.xyz)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-102848297-blue?style=flat-square&logo=linkedin)](https://www.linkedin.com/in/amir-majdi-alomari-102848297/)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-102848297-blue?style=flat-square&logo=linkedin)](https://www.linkedin.com/in/amir-majdi-alomari)
 [![X (Twitter)](https://img.shields.io/badge/X-@amiralomarii-1DA1F2?style=flat-square&logo=twitter)](https://x.com/amiralomarii)
 [![Email](https://img.shields.io/badge/Email-amirooxstar@gmail.com-D14836?style=flat-square&logo=gmail)](mailto:amirooxstar@gmail.com)
 
