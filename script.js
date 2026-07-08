@@ -135,7 +135,7 @@ class EnhancedTypingAnimation {
     const currentPhrase = this.phrases[this.phraseIndex];
     const visibleText = currentPhrase.substring(0, this.charIndex);
 
-    this.element.innerHTML = `${visibleText}<span class="cursor">${this.options.cursorChar}</span>`;
+    this.element.innerHTML = visibleText;
 
     if (!this.isDeleting) {
       if (this.charIndex < currentPhrase.length) {
@@ -471,8 +471,8 @@ class EnhancedAnimationObserver {
 
   init() {
     const options = {
-      threshold: 0.1,
-      rootMargin: '0px 0px -50px 0px'
+      threshold: 0.15,
+      rootMargin: '0px 0px -80px 0px'
     };
 
     const observer = new IntersectionObserver((entries) => {
@@ -485,8 +485,8 @@ class EnhancedAnimationObserver {
               entry.target.classList.contains('stat-card')) {
             this.animateWithStagger(entry.target);
           }
-          
-          observer.unobserve(entry.target);
+        } else {
+          entry.target.classList.remove('animate');
         }
       });
     }, options);
@@ -503,7 +503,7 @@ class EnhancedAnimationObserver {
     setTimeout(() => {
       element.style.opacity = '1';
       element.style.transform = 'translateY(0)';
-    }, index * 100);
+    }, index * 120);
   }
 }
 
@@ -804,6 +804,9 @@ class ButtonInteractions {
 
 // ===== INITIALIZATION =====
 document.addEventListener('DOMContentLoaded', () => {
+  // Add animations-ready class to enable scroll animations
+  document.body.classList.add('animations-ready');
+  
   // Check if device supports hover (desktop) or touch (mobile)
   const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   
