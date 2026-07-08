@@ -107,6 +107,10 @@ body {
   position: relative;
 }
 
+*:not(input):not(textarea):not([contenteditable]) {
+  caret-color: transparent;
+}
+
 section {
   scroll-margin-top: 100px;
 }
