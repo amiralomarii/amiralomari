@@ -240,10 +240,21 @@ main {
   background: rgba(255, 255, 255, 0.055);
 }
 
-.cta-button:hover,
+.cta-button:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: var(--shadow-glow);
+}
+
 .cta-button:focus-visible {
   transform: translateY(-2px);
   box-shadow: var(--shadow-glow);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.cta-button:active {
+  transform: translateY(0) scale(0.98);
+  transition: transform 100ms ease;
 }
 
 .button-glow {
@@ -397,9 +408,16 @@ main {
 .stat-card:focus-visible,
 .social-link:hover,
 .social-link:focus-visible {
-  transform: translateY(-6px);
+  transform: translateY(-8px) scale(1.01);
   border-color: var(--color-border-hover);
   box-shadow: var(--shadow-glow);
+}
+
+.project-card:active,
+.stat-card:active,
+.social-link:active {
+  transform: translateY(-4px) scale(0.99);
+  transition: transform 150ms ease;
 }
 
 .card-icon,
@@ -1028,6 +1046,7 @@ body::after {
   overflow: hidden;
   border-radius: 28px;
   background: #0b0f16;
+  position: relative;
 }
 
 .chatbot-embed-container iframe {
@@ -1036,6 +1055,8 @@ body::after {
   height: 100%;
   border-radius: 28px;
   background: transparent;
+  position: relative;
+  z-index: 2;
 }
 
 .fade-in {
@@ -1046,48 +1067,61 @@ body::after {
 
 .animations-ready .fade-in {
   opacity: 0;
-  transform: translateY(24px);
+  transform: translateY(80px);
   animation: none;
+  will-change: opacity, transform;
 }
 
 .animations-ready .fade-in.animate {
-  animation: cleanReveal 780ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: cleanReveal 1400ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.animations-ready .fade-in.animate.animation-complete {
+  will-change: auto;
 }
 
 .hero-section.fade-in.animate .hero-text-block {
-  animation: slideInLeft 860ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: slideInLeft 1500ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  will-change: opacity, transform;
 }
 
 .hero-section.fade-in.animate .hero-visual {
-  animation: slideInRight 920ms cubic-bezier(0.16, 1, 0.3, 1) both 120ms;
+  animation: slideInRight 1500ms cubic-bezier(0.4, 0, 0.2, 1) both 180ms;
+  will-change: opacity, transform;
+}
+
+.testimonials-section.fade-in.animate {
+  animation: testimonialReveal 1300ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  will-change: opacity, transform;
 }
 
 .projects-section.animate .project-card,
 .stats-section.animate .stat-card,
 .contact-section.animate .social-link {
-  animation: cardRise 720ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: cardRise 1200ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  will-change: opacity, transform;
 }
 
 .projects-section.animate .project-card:nth-child(2),
 .stats-section.animate .stat-card:nth-child(2),
 .contact-section.animate .social-link:nth-child(2) {
-  animation-delay: 110ms;
+  animation-delay: 150ms;
 }
 
 .projects-section.animate .project-card:nth-child(3),
 .stats-section.animate .stat-card:nth-child(3),
 .contact-section.animate .social-link:nth-child(3) {
-  animation-delay: 220ms;
+  animation-delay: 300ms;
 }
 
 .stats-section.animate .stat-card:nth-child(4) {
-  animation-delay: 330ms;
+  animation-delay: 450ms;
 }
 
 @keyframes slideInLeft {
   from {
     opacity: 0;
-    transform: translateX(-32px);
+    transform: translateX(-80px);
   }
   to {
     opacity: 1;
@@ -1098,7 +1132,7 @@ body::after {
 @keyframes slideInRight {
   from {
     opacity: 0;
-    transform: translateX(32px) scale(0.98);
+    transform: translateX(80px) scale(0.85);
   }
   to {
     opacity: 1;
@@ -1109,7 +1143,29 @@ body::after {
 @keyframes cardRise {
   from {
     opacity: 0;
-    transform: translateY(28px) scale(0.985);
+    transform: translateY(60px) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes cleanReveal {
+  from {
+    opacity: 0;
+    transform: translateY(80px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes testimonialReveal {
+  from {
+    opacity: 0;
+    transform: translateY(60px) scale(0.95);
   }
   to {
     opacity: 1;
@@ -1448,6 +1504,10 @@ main {
 
 .chatbot-embed-container:hover {
   box-shadow: 0 30px 100px rgba(79, 140, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+}
+
+.chatbot-embed-container:hover iframe {
+  pointer-events: auto;
 }
 
 .magnetic-control {
