@@ -1,375 +1,629 @@
 (() => {
   'use strict';
 
+  const html = document.documentElement;
   const body = document.body;
-  const header = document.querySelector('[data-header]');
-  const progress = document.querySelector('.scroll-progress span');
-  const menuButton = document.querySelector('.menu-toggle');
-  const mobileNav = document.querySelector('.mobile-nav');
-  const year = document.querySelector('[data-year]');
-  const stage = document.querySelector('[data-tilt-stage]');
-  const portraitCard = document.querySelector('[data-portrait-card]');
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const doc = document.documentElement;
+  const clamp = (n, min = 0, max = 1) => Math.min(max, Math.max(min, n));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const round = (n, d = 2) => Number(n.toFixed(d));
 
-  if (year) year.textContent = new Date().getFullYear();
+  const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const coarseQuery = window.matchMedia('(pointer: coarse)');
+  const fineQuery = window.matchMedia('(pointer: fine)');
 
-  const updateScroll = () => {
-    const y = window.scrollY || document.documentElement.scrollTop;
-    if (header) header.classList.toggle('is-scrolled', y > 18);
-    if (progress) {
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      progress.style.transform = `scaleX(${max > 0 ? Math.min(1, y / max) : 0})`;
-    }
-  };
+  const viewportWidth = () => Math.round(window.visualViewport?.width || window.innerWidth);
+  const viewportHeight = () => Math.round(window.visualViewport?.height || window.innerHeight);
 
-  const clamp01 = value => Math.max(0, Math.min(1, value));
-  const smootherStep = value => {
-    const x = clamp01(value);
-    return x * x * x * (x * (x * 6 - 15) + 10);
-  };
-  const lerp = (from, to, amount) => from + (to - from) * amount;
+  let reducedMotion = reducedMotionQuery.matches;
+  let motionProfile = 'desktop';
+  let lastScrollY = window.scrollY;
+  let scrollDirection = 0;
+  let raf = 0;
 
-  const revealTargets = [...document.querySelectorAll('.reveal-split, .reveal-board, .reveal-process, .reveal-device, .reveal-profile')];
-  const projectScenes = [...document.querySelectorAll('.reveal-project')];
-  const motionItems = [...revealTargets, ...projectScenes];
-  const motionState = new WeakMap();
-
-  // A scene is fully settled through the useful middle of the viewport, then
-  // gently relaxes in the opposite direction near either edge. Because the
-  // same progress is calculated in both directions, scrolling back up feels
-  // like a composed reverse motion rather than a one-time reveal being replayed.
-  const getSceneTarget = (element, vh) => {
-    const rect = element.getBoundingClientRect();
-    const entry = smootherStep((vh * .96 - rect.top) / (vh * .30));
-    const exit = smootherStep((rect.bottom - vh * .08) / (vh * .26));
-    const presence = Math.min(entry, exit);
-
-    // Enter from below when scrolling down; leave toward the top once the
-    // section is almost gone. The reverse path happens naturally on scroll-up.
-    const y = (1 - entry) * 30 - (1 - exit) * 20;
-    const scale = .986 + presence * .014;
-    const opacity = .08 + presence * .92;
-    const blur = (1 - presence) * 2.4;
-
-    return { presence, entry, exit, y, scale, opacity, blur };
-  };
-
-  const applyRevealState = (element, state) => {
-    element.style.setProperty('--reveal-progress', state.presence.toFixed(4));
-    element.style.setProperty('--reveal-y', `${state.y.toFixed(2)}px`);
-    element.style.setProperty('--reveal-scale', state.scale.toFixed(4));
-    element.style.setProperty('--reveal-opacity', state.opacity.toFixed(3));
-    element.style.setProperty('--reveal-blur', `${state.blur.toFixed(2)}px`);
-  };
-
-  const applyProjectState = (scene, state) => {
-    // Large visuals use a little more depth than ordinary section reveals, but
-    // stay restrained so the UI itself remains the focus.
-    const p = state.presence;
-    const sceneY = state.y * 1.15;
-    const sceneScale = .972 + p * .028;
-    const sceneOpacity = .06 + p * .94;
-    const sceneBlur = (1 - p) * 4.4;
-    const copyY = state.y * .62;
-    const copyOpacity = .16 + p * .84;
-
-    scene.style.setProperty('--scene-progress', p.toFixed(4));
-    scene.style.setProperty('--detail-progress', p.toFixed(4));
-    scene.style.setProperty('--scene-y', `${sceneY.toFixed(2)}px`);
-    scene.style.setProperty('--scene-scale', sceneScale.toFixed(4));
-    scene.style.setProperty('--scene-opacity', sceneOpacity.toFixed(3));
-    scene.style.setProperty('--scene-blur', `${sceneBlur.toFixed(2)}px`);
-    scene.style.setProperty('--copy-y', `${copyY.toFixed(2)}px`);
-    scene.style.setProperty('--copy-opacity', copyOpacity.toFixed(3));
-
-    const canvas = scene.querySelector('.automation-canvas');
-    if (canvas) {
-      // Keep the travelling workflow signals active only while the canvas is
-      // comfortably on screen. Hysteresis prevents rapid on/off flicker.
-      const flowing = canvas.classList.contains('is-flowing');
-      if (!flowing && p > .72) canvas.classList.add('is-flowing');
-      if (flowing && p < .58) canvas.classList.remove('is-flowing');
-    }
-  };
-
-  const valuesAreSettled = (current, target) => (
-    Math.abs(current.presence - target.presence) < .001 &&
-    Math.abs(current.y - target.y) < .05 &&
-    Math.abs(current.scale - target.scale) < .0002 &&
-    Math.abs(current.opacity - target.opacity) < .001 &&
-    Math.abs(current.blur - target.blur) < .03
-  );
-
-  let motionRaf = 0;
-  let lastFrameTime = performance.now();
-
-  const renderScrollMotion = now => {
-    const vh = window.innerHeight || document.documentElement.clientHeight;
-    const dt = Math.min(40, Math.max(8, now - lastFrameTime));
-    lastFrameTime = now;
-
-    // Frame-rate independent damping: responsive under a mouse wheel but still
-    // fluid on a fast trackpad or mobile momentum scroll.
-    const damping = 1 - Math.exp(-dt * .018);
-    let unsettled = false;
-
-    motionItems.forEach(element => {
-      const target = getSceneTarget(element, vh);
-      let current = motionState.get(element);
-
-      if (!current) {
-        // Do not animate from an arbitrary state on a refreshed anchor/deep link.
-        current = { ...target };
-        motionState.set(element, current);
-      } else {
-        current.presence = lerp(current.presence, target.presence, damping);
-        current.entry = lerp(current.entry, target.entry, damping);
-        current.exit = lerp(current.exit, target.exit, damping);
-        current.y = lerp(current.y, target.y, damping);
-        current.scale = lerp(current.scale, target.scale, damping);
-        current.opacity = lerp(current.opacity, target.opacity, damping);
-        current.blur = lerp(current.blur, target.blur, damping);
-        if (!valuesAreSettled(current, target)) unsettled = true;
-      }
-
-      if (element.classList.contains('reveal-project')) {
-        applyProjectState(element, current);
-      } else {
-        applyRevealState(element, current);
-      }
-    });
-
-    updateScroll();
-
-    if (unsettled) {
-      motionRaf = requestAnimationFrame(renderScrollMotion);
-    } else {
-      motionRaf = 0;
-    }
-  };
-
-  const requestScrollMotion = () => {
-    if (reducedMotion) {
-      updateScroll();
-      return;
-    }
-    if (!motionRaf) {
-      lastFrameTime = performance.now();
-      motionRaf = requestAnimationFrame(renderScrollMotion);
-    }
-  };
-
-  if (reducedMotion) {
-    revealTargets.forEach(element => {
-      element.style.setProperty('--reveal-progress', '1');
-      element.style.setProperty('--reveal-y', '0px');
-      element.style.setProperty('--reveal-scale', '1');
-      element.style.setProperty('--reveal-opacity', '1');
-      element.style.setProperty('--reveal-blur', '0px');
-    });
-    projectScenes.forEach(scene => {
-      scene.style.setProperty('--scene-progress', '1');
-      scene.style.setProperty('--detail-progress', '1');
-      scene.style.setProperty('--scene-y', '0px');
-      scene.style.setProperty('--scene-scale', '1');
-      scene.style.setProperty('--scene-opacity', '1');
-      scene.style.setProperty('--scene-blur', '0px');
-      scene.style.setProperty('--copy-y', '0px');
-      scene.style.setProperty('--copy-opacity', '1');
-      const canvas = scene.querySelector('.automation-canvas');
-      if (canvas) canvas.classList.add('is-flowing');
-    });
-    updateScroll();
-  } else {
-    // Prime positions once so below-the-fold content starts in the correct state,
-    // then let every wheel/touch movement drive the same reversible choreography.
-    const vh = window.innerHeight || document.documentElement.clientHeight;
-    motionItems.forEach(element => {
-      const state = getSceneTarget(element, vh);
-      motionState.set(element, { ...state });
-      element.classList.contains('reveal-project') ? applyProjectState(element, state) : applyRevealState(element, state);
-    });
-    updateScroll();
+  function resolveMotionProfile() {
+    reducedMotion = reducedMotionQuery.matches;
+    if (reducedMotion) return 'reduced';
+    const width = viewportWidth();
+    const coarse = coarseQuery.matches;
+    if (width <= 720 || (coarse && width <= 820)) return 'mobile';
+    if (width <= 1179 || coarse) return 'tablet';
+    return 'desktop';
   }
 
-  window.addEventListener('scroll', requestScrollMotion, { passive: true });
-  window.addEventListener('resize', requestScrollMotion, { passive: true });
+  function setMotionProfile(force = false) {
+    const next = resolveMotionProfile();
+    if (!force && next === motionProfile) return false;
+    motionProfile = next;
+    html.dataset.motion = next;
+    return true;
+  }
+  setMotionProfile(true);
+
+  const isDesktop = () => motionProfile === 'desktop';
+  const isTablet = () => motionProfile === 'tablet';
+  const isMobile = () => motionProfile === 'mobile';
+
+  /* 0 → 1 while an element travels through the viewport. Because this is
+     calculated from geometry on every frame, all choreography reverses when
+     the visitor scrolls upward. */
+  function travelProgress(element, enter = .9, exit = .12) {
+    if (!element) return 0;
+    const r = element.getBoundingClientRect();
+    const vh = viewportHeight();
+    const start = vh * enter;
+    const end = vh * exit - r.height;
+    return clamp((start - r.top) / Math.max(1, start - end));
+  }
+
+  function viewportSigned(element) {
+    if (!element) return 0;
+    const r = element.getBoundingClientRect();
+    const vh = viewportHeight();
+    const center = r.top + r.height / 2;
+    const range = Math.max(vh * .55, (vh + r.height) * .36);
+    return clamp((center - vh * .5) / range, -1, 1);
+  }
+
+  function viewportFocus(element) {
+    return 1 - Math.abs(viewportSigned(element));
+  }
+
+  /* ------------------------------------------------------------------
+     Header + mobile menu
+     ------------------------------------------------------------------ */
+  const header = document.querySelector('[data-header]');
+  const menuToggle = document.querySelector('.menu-toggle');
+  const mobileNav = document.querySelector('.mobile-nav');
+  const mobileBackdrop = document.querySelector('.mobile-nav__backdrop');
 
   const closeMenu = () => {
-    if (!menuButton || !mobileNav) return;
-    menuButton.setAttribute('aria-expanded', 'false');
-    menuButton.setAttribute('aria-label', 'Open navigation');
+    if (!menuToggle || !mobileNav) return;
+    menuToggle.setAttribute('aria-expanded', 'false');
+    menuToggle.setAttribute('aria-label', 'Open navigation');
     mobileNav.classList.remove('is-open');
     mobileNav.setAttribute('aria-hidden', 'true');
     body.classList.remove('menu-open');
   };
 
   const openMenu = () => {
-    if (!menuButton || !mobileNav) return;
-    menuButton.setAttribute('aria-expanded', 'true');
-    menuButton.setAttribute('aria-label', 'Close navigation');
+    if (!menuToggle || !mobileNav) return;
+    menuToggle.setAttribute('aria-expanded', 'true');
+    menuToggle.setAttribute('aria-label', 'Close navigation');
     mobileNav.classList.add('is-open');
     mobileNav.setAttribute('aria-hidden', 'false');
     body.classList.add('menu-open');
   };
 
-  if (menuButton && mobileNav) {
-    menuButton.addEventListener('click', () => {
-      const open = menuButton.getAttribute('aria-expanded') === 'true';
-      open ? closeMenu() : openMenu();
-    });
-    mobileNav.querySelectorAll('a').forEach(link => link.addEventListener('click', closeMenu));
-    const backdrop = mobileNav.querySelector('.mobile-nav__backdrop');
-    if (backdrop) backdrop.addEventListener('click', closeMenu);
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
-  }
+  menuToggle?.addEventListener('click', () => menuToggle.getAttribute('aria-expanded') === 'true' ? closeMenu() : openMenu());
+  mobileBackdrop?.addEventListener('click', closeMenu);
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') closeMenu(); });
 
-  document.querySelectorAll('a[href^="#"]').forEach(link => {
+  const headerOffset = () => isMobile() ? 78 : 94;
+  document.querySelectorAll('[data-scroll-link][href^="#"]').forEach(link => {
     link.addEventListener('click', event => {
-      const selector = link.getAttribute('href');
-      if (!selector || selector === '#') return;
-      const target = document.querySelector(selector);
+      const target = document.querySelector(link.getAttribute('href'));
       if (!target) return;
       event.preventDefault();
-      const offset = header ? header.getBoundingClientRect().height + 24 : 0;
-      const top = target.getBoundingClientRect().top + window.scrollY - offset;
-      window.scrollTo({ top, behavior: reducedMotion ? 'auto' : 'smooth' });
-      history.replaceState(null, '', selector);
+      closeMenu();
+      const top = target.getBoundingClientRect().top + window.scrollY - headerOffset();
+      window.scrollTo({ top: Math.max(0, top), behavior: reducedMotion ? 'auto' : 'smooth' });
     });
   });
 
-  if (stage && portraitCard && !reducedMotion && matchMedia('(pointer:fine)').matches) {
-    let currentX = 0, currentY = 0, currentTiltX = 0, currentTiltY = 0;
-    let targetX = 0, targetY = 0, targetTiltX = 0, targetTiltY = 0;
-    let portraitRaf = 0;
+  /* ------------------------------------------------------------------
+     Custom desktop scroll rail. Native wheel / trackpad physics remain intact.
+     ------------------------------------------------------------------ */
+  const scrollRail = document.querySelector('.custom-scroll');
+  const scrollThumb = document.querySelector('.custom-scroll__thumb');
+  let thumbHeight = 60;
+  let thumbTravel = 0;
+  let draggingThumb = false;
+  let dragStartY = 0;
+  let dragStartScroll = 0;
+  let railTimer = 0;
 
-    const animatePortrait = () => {
-      currentX += (targetX - currentX) * .09;
-      currentY += (targetY - currentY) * .09;
-      currentTiltX += (targetTiltX - currentTiltX) * .085;
-      currentTiltY += (targetTiltY - currentTiltY) * .085;
-      portraitCard.style.setProperty('--portrait-x', `${currentX.toFixed(2)}px`);
-      portraitCard.style.setProperty('--portrait-y', `${currentY.toFixed(2)}px`);
-      portraitCard.style.setProperty('--tilt-x', `${currentTiltX.toFixed(2)}deg`);
-      portraitCard.style.setProperty('--tilt-y', `${currentTiltY.toFixed(2)}deg`);
+  function measureScrollbar() {
+    if (!scrollRail || !scrollThumb || !isDesktop()) return;
+    const railHeight = scrollRail.clientHeight;
+    const total = Math.max(viewportHeight(), doc.scrollHeight);
+    const ratio = viewportHeight() / total;
+    thumbHeight = clamp(railHeight * ratio, 48, 105);
+    thumbTravel = Math.max(0, railHeight - thumbHeight);
+    scrollThumb.style.height = `${thumbHeight}px`;
+  }
 
-      const moving = Math.abs(targetX-currentX)+Math.abs(targetY-currentY)+Math.abs(targetTiltX-currentTiltX)+Math.abs(targetTiltY-currentTiltY) > .025;
-      portraitRaf = moving ? requestAnimationFrame(animatePortrait) : 0;
+  function wakeScrollRail() {
+    if (!scrollRail || !isDesktop()) return;
+    scrollRail.classList.add('is-active');
+    clearTimeout(railTimer);
+    railTimer = setTimeout(() => scrollRail.classList.remove('is-active'), 760);
+  }
+
+  function updateScrollbar(scrollY, maxScroll) {
+    if (!scrollThumb || !isDesktop()) return;
+    const p = maxScroll <= 0 ? 0 : scrollY / maxScroll;
+    scrollThumb.style.transform = `translate3d(-50%,${round(thumbTravel * p)}px,0)`;
+  }
+
+  if (scrollRail && scrollThumb) {
+    scrollRail.addEventListener('pointerdown', event => {
+      if (!isDesktop()) return;
+      if (event.target === scrollThumb || scrollThumb.contains(event.target)) {
+        draggingThumb = true;
+        dragStartY = event.clientY;
+        dragStartScroll = window.scrollY;
+        scrollRail.classList.add('is-dragging');
+        scrollThumb.setPointerCapture?.(event.pointerId);
+      } else {
+        const r = scrollRail.getBoundingClientRect();
+        const maxScroll = Math.max(1, doc.scrollHeight - viewportHeight());
+        const p = clamp((event.clientY - r.top - thumbHeight / 2) / Math.max(1, r.height - thumbHeight));
+        window.scrollTo({ top: p * maxScroll, behavior: reducedMotion ? 'auto' : 'smooth' });
+      }
+      event.preventDefault();
+    });
+
+    scrollThumb.addEventListener('pointermove', event => {
+      if (!draggingThumb) return;
+      const maxScroll = Math.max(1, doc.scrollHeight - viewportHeight());
+      const delta = event.clientY - dragStartY;
+      const next = dragStartScroll + (thumbTravel ? delta / thumbTravel * maxScroll : 0);
+      window.scrollTo(0, clamp(next, 0, maxScroll));
+    });
+
+    const endDrag = event => {
+      if (!draggingThumb) return;
+      draggingThumb = false;
+      scrollRail.classList.remove('is-dragging');
+      try { scrollThumb.releasePointerCapture?.(event.pointerId); } catch (_) {}
     };
-    const startPortrait = () => { if (!portraitRaf) portraitRaf = requestAnimationFrame(animatePortrait); };
+    scrollThumb.addEventListener('pointerup', endDrag);
+    scrollThumb.addEventListener('pointercancel', endDrag);
+  }
 
-    stage.addEventListener('pointermove', event => {
-      const rect = stage.getBoundingClientRect();
-      const nx = (event.clientX - rect.left) / rect.width - .5;
-      const ny = (event.clientY - rect.top) / rect.height - .5;
-      targetTiltY = nx * 3.6;
-      targetTiltX = ny * -2.8;
-      targetX = nx * 5;
-      targetY = ny * 4;
-      startPortrait();
-    });
-    stage.addEventListener('pointerleave', () => {
-      targetX = targetY = targetTiltX = targetTiltY = 0;
-      startPortrait();
+  /* ------------------------------------------------------------------
+     Signature motion scenes
+     ------------------------------------------------------------------ */
+  const hero = document.querySelector('[data-hero]');
+  const heroCopy = document.querySelector('[data-hero-copy]');
+  const heroMedia = document.querySelector('[data-hero-media]');
+  const manifesto = document.querySelector('[data-manifesto]');
+  const manifestoStats = [...document.querySelectorAll('.manifesto-stats article')];
+  const workIntro = document.querySelector('.work-intro');
+  const caseCards = [...document.querySelectorAll('[data-case-card]')];
+  const capabilityList = document.querySelector('[data-capability-list]');
+  const capabilityMarker = capabilityList?.querySelector('.capabilities-marker');
+  const capabilityItems = [...document.querySelectorAll('[data-capability-item]')];
+  const processScene = document.querySelector('[data-horizontal]');
+  const processCards = [...document.querySelectorAll('.process-card')];
+  const assistantScene = document.querySelector('[data-assistant-scene]');
+  const assistantCopy = document.querySelector('[data-assistant-copy]');
+  const assistantDevice = document.querySelector('[data-assistant-device]');
+  const profileScene = document.querySelector('[data-profile-scene]');
+  const footerScene = document.querySelector('[data-footer-scene]');
+  const darkSections = [...document.querySelectorAll('.capabilities,.assistant-scene,.site-footer')];
+  const navLinks = [...document.querySelectorAll('.desktop-nav a[href^="#"]')];
+  const navSections = ['work','capabilities','assistant'].map(id => document.getElementById(id)).filter(Boolean);
+  const webPointer = document.querySelector('.demo-pointer');
+
+  const automationCards = caseCards.map(card => {
+    if (card.dataset.caseType !== 'automation') return null;
+    const path = card.querySelector('.flow-base');
+    const dot = card.querySelector('.flow-dot');
+    return {
+      card,
+      path,
+      dot,
+      length: path?.getTotalLength?.() || 0,
+      steps: [...card.querySelectorAll('.workflow-step')]
+    };
+  }).filter(Boolean);
+
+  function setIndexPulse(root, value) {
+    root?.style.setProperty('--index-line', String(clamp(.32 + value * .68)));
+  }
+
+  function renderHero(scrollY) {
+    if (!hero) return;
+    const vh = viewportHeight();
+    const end = Math.max(vh * .82, hero.offsetHeight * .84);
+    const p = clamp(scrollY / end);
+
+    hero.style.setProperty('--hero-accent-p', String(round(p,4)));
+
+    if (reducedMotion) {
+      hero.style.setProperty('--hero-image-y', '0px');
+      return;
+    }
+
+    if (isDesktop()) {
+      hero.style.setProperty('--hero-l1x', `${round(lerp(0,-54,p))}px`);
+      hero.style.setProperty('--hero-l2x', `${round(lerp(0,38,p))}px`);
+      hero.style.setProperty('--hero-l3x', `${round(lerp(0,-26,p))}px`);
+      hero.style.setProperty('--hero-l4x', `${round(lerp(0,24,p))}px`);
+      hero.style.setProperty('--hero-l1y', `${round(lerp(0,-5,p))}px`);
+      hero.style.setProperty('--hero-l2y', `${round(lerp(0,5,p))}px`);
+      hero.style.setProperty('--hero-media-x', `${round(lerp(0,24,p))}px`);
+      hero.style.setProperty('--hero-media-y', `${round(lerp(0,-18,p))}px`);
+      hero.style.setProperty('--hero-media-r', `${round(lerp(0,.75,p),3)}deg`);
+      hero.style.setProperty('--hero-image-y', `${round(lerp(18,-20,p))}px`);
+      hero.style.setProperty('--hero-caption-y', `${round(lerp(-2,4,p))}px`);
+    } else if (isTablet()) {
+      hero.style.setProperty('--hero-media-y', `${round(lerp(0,-11,p))}px`);
+      hero.style.setProperty('--hero-image-y', `${round(lerp(6,-7,p))}px`);
+      hero.style.setProperty('--hero-caption-y', `${round(lerp(0,2,p))}px`);
+    } else {
+      hero.style.setProperty('--hero-image-y', '0px');
+      hero.style.setProperty('--hero-caption-y', '0px');
+    }
+
+    hero.style.setProperty('--hero-cue-y', `${round(p * 10)}px`);
+    hero.style.setProperty('--hero-cue-o', String(round(1 - p * .9, 3)));
+  }
+
+  function renderManifesto() {
+    if (!manifesto) return;
+    const p = travelProgress(manifesto, .9, .24);
+    manifesto.style.setProperty('--manifesto-p', String(round(p, 4)));
+    manifesto.style.setProperty('--manifesto-shift', `${round(lerp(18,-10,p))}px`);
+    setIndexPulse(manifesto, p);
+    manifestoStats.forEach((item, i) => {
+      const start = .08 + i * .1;
+      const local = clamp((p - start) / .42);
+      item.style.setProperty('--stat-p', String(round(local, 4)));
+      item.style.setProperty('--stat-y', `${round(lerp(12,-3,local))}px`);
     });
   }
 
-  if (!reducedMotion && matchMedia('(pointer:fine)').matches) {
-    // Smooth magnetic controls: pointer movement sets a target and a small
-    // spring loop eases the element toward it. This avoids the stutter that
-    // happens when CSS transform transitions fight pointermove updates.
+  function renderWorkIntro() {
+    if (!workIntro || reducedMotion) return;
+    const signed = viewportSigned(workIntro);
+    const focus = viewportFocus(workIntro);
+    const amp = isDesktop() ? 42 : isTablet() ? 14 : 0;
+    workIntro.style.setProperty('--work-title-x', `${round(signed * amp)}px`);
+    workIntro.style.setProperty('--work-note-x', `${round(-signed * amp * .75)}px`);
+    setIndexPulse(workIntro, focus);
+  }
+
+  function renderCases() {
+    caseCards.forEach(card => {
+      const p = travelProgress(card, .92, .1);
+      const signed = viewportSigned(card);
+      const focus = viewportFocus(card);
+      card.style.setProperty('--case-p', String(round(p,4)));
+      card.style.setProperty('--case-focus', String(round(focus,4)));
+      card.style.setProperty('--case-lift', `${round((1-focus) * (isDesktop() ? 9 : isTablet() ? 4 : 0))}px`);
+      card.style.setProperty('--case-copy-y', `${round(signed * (isDesktop() ? 14 : 0))}px`);
+      card.style.setProperty('--case-stage-y', `${round(-signed * (isDesktop() ? 13 : 0))}px`);
+      card.style.setProperty('--case-shadow-y', `${round(focus * 12)}px`);
+      card.style.setProperty('--case-shadow-blur', `${round(focus * 28)}px`);
+      card.style.setProperty('--case-shadow-a', String(round(.05 + focus * .035,3)));
+      card.style.setProperty('--case-border-a', String(round(.13 + focus * .12,3)));
+      setIndexPulse(card, focus);
+
+      const stage = card.querySelector('.automation-stage,.web-stage,.ask-stage');
+      stage?.classList.toggle('is-focused', focus > .56);
+
+      if (card.dataset.caseType === 'web') {
+        const amp = isDesktop() ? 1 : isTablet() ? .58 : .34;
+        card.style.setProperty('--web-back-x', `${round(-signed * 30 * amp)}px`);
+        card.style.setProperty('--web-back-y', `${round(signed * 24 * amp)}px`);
+        card.style.setProperty('--web-front-x', `${round(signed * 22 * amp)}px`);
+        card.style.setProperty('--web-front-y', `${round(-signed * 20 * amp)}px`);
+        card.style.setProperty('--web-phone-x', `${round(-signed * 34 * amp)}px`);
+        card.style.setProperty('--web-phone-y', `${round(signed * 30 * amp)}px`);
+        card.style.setProperty('--web-back-r', `${round(1.35 + signed * 1.15 * amp,3)}deg`);
+        card.style.setProperty('--web-front-r', `${round(-.8 - signed * .95 * amp,3)}deg`);
+        card.style.setProperty('--web-phone-r', `${round(1.5 + signed * 1.6 * amp,3)}deg`);
+        card.style.setProperty('--web-scale', String(round(.97 + focus * .035,4)));
+        card.style.setProperty('--web-line-p', String(round(focus,4)));
+
+        const pointerP = clamp((p - .12) / .74);
+        const px = lerp(25, 76, pointerP);
+        const py = 50 + Math.sin(pointerP * Math.PI * 1.65) * 17;
+        card.style.setProperty('--web-pointer-x', `${round(px,2)}%`);
+        card.style.setProperty('--web-pointer-y', `${round(py,2)}%`);
+        card.style.setProperty('--web-pointer-o', String(round(clamp((focus-.18)/.55),3)));
+      }
+
+      if (card.dataset.caseType === 'ask') {
+        const amp = isDesktop() ? 1 : isTablet() ? .55 : .22;
+        card.style.setProperty('--ask-command-x', `${round(signed * 28 * amp)}px`);
+        card.style.setProperty('--ask-command-y', `${round(signed * 9 * amp)}px`);
+        card.style.setProperty('--ask-answer-x', `${round(-signed * 24 * amp)}px`);
+        card.style.setProperty('--ask-answer-y', `${round(-signed * 8 * amp)}px`);
+        card.style.setProperty('--ask-query-x', `${round(signed * 18 * amp)}px`);
+        card.classList.toggle('is-command-sent', p > .34);
+        card.classList.toggle('is-answer-ready', p > .51);
+        card.classList.toggle('is-queries-ready', p > .67);
+      }
+    });
+
+    automationCards.forEach(({card,path,dot,length,steps}) => {
+      if (!path || !dot || !length) return;
+      const p = travelProgress(card, .9, .12);
+      const signalP = clamp((p - .04) / .91);
+      card.style.setProperty('--flow-offset', String(round(100 - signalP * 100,3)));
+      card.style.setProperty('--flow-dot-opacity', String(signalP > .01 && signalP < .995 ? 1 : .25));
+      const point = path.getPointAtLength(length * signalP);
+      dot.setAttribute('cx', round(point.x, 2));
+      dot.setAttribute('cy', round(point.y, 2));
+
+      const thresholds = [.05,.29,.54,.78];
+      let current = 0;
+      for (let i=0;i<thresholds.length;i++) if (signalP >= thresholds[i]) current = i;
+      steps.forEach((step,i) => {
+        step.classList.toggle('is-current', i === current && signalP < .985);
+        step.classList.toggle('is-complete', signalP >= Math.min(.98, thresholds[i] + .16));
+      });
+    });
+  }
+
+  function renderCapabilities() {
+    if (!capabilityItems.length || !capabilityList) return;
+    let active = 0;
+    let best = Infinity;
+    const targetY = viewportHeight() * .52;
+    capabilityItems.forEach((item, index) => {
+      const r = item.getBoundingClientRect();
+      const center = r.top + r.height / 2;
+      const distance = Math.abs(center - targetY);
+      const rowFocus = clamp(1 - distance / Math.max(viewportHeight() * .48, 320));
+      item.style.setProperty('--row-focus', String(round(rowFocus,4)));
+      item.style.setProperty('--row-x', `${round(rowFocus * (isDesktop() ? 18 : 7))}px`);
+      if (distance < best) { best = distance; active = index; }
+    });
+    capabilityItems.forEach((item,index) => item.classList.toggle('is-active', index === active));
+    if (capabilityMarker) {
+      const item = capabilityItems[active];
+      const markerH = isMobile() ? 36 : 52;
+      const y = item.offsetTop + item.offsetHeight / 2 - markerH / 2;
+      capabilityList.style.setProperty('--cap-marker-y', `${round(y)}px`);
+    }
+    const section = document.getElementById('capabilities');
+    if (section) setIndexPulse(section, viewportFocus(section));
+  }
+
+  function renderProcess() {
+    if (!processScene || !processCards.length) return;
+    const p = travelProgress(processScene, .9, .12);
+    processScene.style.setProperty('--process-p', String(round(p,4)));
+    setIndexPulse(processScene, viewportFocus(processScene));
+
+    const n = processCards.length;
+    let current = Math.min(n - 1, Math.max(0, Math.floor(p * n)));
+    if (p >= .995) current = n - 1;
+    processCards.forEach((card,i) => {
+      const center = (i + .5) / n;
+      const local = clamp(1 - Math.abs(p - center) * n * 1.25);
+      const passed = p >= (i + 1) / n - .015;
+      card.classList.toggle('is-passed', passed);
+      card.classList.toggle('is-current', i === current && p < 1);
+      card.style.setProperty('--process-card-y', `${round((1-local) * (isDesktop() ? 8 : 3))}px`);
+      card.style.setProperty('--process-card-r', `${round((i%2?1:-1) * local * (isDesktop()? .45:.15),3)}deg`);
+      card.style.setProperty('--process-card-glow', String(round(.35 + local*.55,3)));
+    });
+  }
+
+  function renderAssistant() {
+    if (!assistantScene) return;
+    const signed = viewportSigned(assistantScene);
+    const focus = viewportFocus(assistantScene);
+    const active = focus > .32;
+    assistantScene.classList.toggle('is-scene-active', active);
+    assistantScene.style.setProperty('--assistant-focus', String(round(focus,4)));
+    assistantDevice?.style.setProperty('--assistant-ring-a', String(round(focus*.15,4)));
+    setIndexPulse(assistantScene, focus);
+    if (reducedMotion) return;
+
+    if (isDesktop()) {
+      assistantCopy?.style.setProperty('--assistant-copy-x', `${round(-signed * 16)}px`);
+      assistantDevice?.style.setProperty('--assistant-device-x', `${round(signed * 18)}px`);
+      assistantDevice?.style.setProperty('--assistant-device-y', `${round(signed * 10)}px`);
+      assistantDevice?.style.setProperty('--assistant-device-r', `${round(signed * .42,3)}deg`);
+    } else if (isTablet()) {
+      assistantCopy?.style.setProperty('--assistant-copy-x', '0px');
+      assistantDevice?.style.setProperty('--assistant-device-x', '0px');
+      assistantDevice?.style.setProperty('--assistant-device-y', `${round(signed * 8)}px`);
+      assistantDevice?.style.setProperty('--assistant-device-r', '0deg');
+    } else {
+      assistantCopy?.style.setProperty('--assistant-copy-x', '0px');
+      assistantDevice?.style.setProperty('--assistant-device-x', '0px');
+      assistantDevice?.style.setProperty('--assistant-device-y', '0px');
+      assistantDevice?.style.setProperty('--assistant-device-r', '0deg');
+    }
+  }
+
+  function renderProfile() {
+    if (!profileScene || reducedMotion) return;
+    const signed = viewportSigned(profileScene);
+    const focus = viewportFocus(profileScene);
+    const imageAmp = isDesktop() ? 24 : isTablet() ? 10 : 0;
+    const copyAmp = isDesktop() ? 14 : 0;
+    profileScene.style.setProperty('--profile-image-y', `${round(signed * imageAmp)}px`);
+    profileScene.style.setProperty('--profile-caption-y', `${round(-signed * imageAmp * .12)}px`);
+    profileScene.style.setProperty('--profile-copy-x', `${round(-signed * copyAmp)}px`);
+    setIndexPulse(profileScene, focus);
+  }
+
+  function renderFooter() {
+    if (!footerScene || reducedMotion) return;
+    const p = travelProgress(footerScene, .96, .22);
+    const signed = viewportSigned(footerScene);
+    footerScene.style.setProperty('--footer-copy-x', `${round(signed * (isDesktop() ? 20 : 0))}px`);
+    footerScene.style.setProperty('--footer-arrow-r', `${round(lerp(-12,12,p),2)}deg`);
+    footerScene.style.setProperty('--footer-arrow-x', `${round(lerp(5,-3,p))}px`);
+    footerScene.style.setProperty('--footer-arrow-y', `${round(lerp(5,-3,p))}px`);
+    setIndexPulse(footerScene, viewportFocus(footerScene));
+  }
+
+  function renderHeader(scrollY) {
+    if (!header) return;
+    header.classList.toggle('is-scrolled', scrollY > 20);
+    if ((isMobile() || isTablet()) && !body.classList.contains('menu-open')) {
+      const hide = scrollDirection > 0 && scrollY > 220;
+      header.classList.toggle('is-hidden', hide);
+    } else {
+      header.classList.remove('is-hidden');
+    }
+
+    const probe = Math.min(viewportHeight() * .12, 105);
+    const onDark = darkSections.some(section => {
+      const r = section.getBoundingClientRect();
+      return r.top <= probe && r.bottom >= probe;
+    });
+    body.classList.toggle('on-dark', onDark);
+  }
+
+  function renderNavigation() {
+    if (!navSections.length) return;
+    let current = null;
+    let score = Infinity;
+    navSections.forEach(section => {
+      const r = section.getBoundingClientRect();
+      if (r.bottom <= 0 || r.top >= viewportHeight()) return;
+      const distance = Math.abs(r.top - viewportHeight() * .24);
+      if (distance < score) { score = distance; current = section.id; }
+    });
+    navLinks.forEach(link => link.classList.toggle('is-active', !!current && link.getAttribute('href') === `#${current}`));
+  }
+
+  function render() {
+    raf = 0;
+    const scrollY = window.scrollY || doc.scrollTop;
+    const delta = scrollY - lastScrollY;
+    if (Math.abs(delta) > 1) {
+      scrollDirection = delta > 0 ? 1 : -1;
+      html.dataset.scrollDirection = scrollDirection > 0 ? 'down' : 'up';
+    }
+    lastScrollY = scrollY;
+
+    const maxScroll = Math.max(1, doc.scrollHeight - viewportHeight());
+    updateScrollbar(scrollY, maxScroll);
+    renderHeader(scrollY);
+    renderHero(scrollY);
+    renderManifesto();
+    renderWorkIntro();
+    renderCases();
+    renderCapabilities();
+    renderProcess();
+    renderAssistant();
+    renderProfile();
+    renderFooter();
+    renderNavigation();
+  }
+
+  const requestRender = () => {
+    wakeScrollRail();
+    if (!raf) raf = requestAnimationFrame(render);
+  };
+
+  /* Desktop-only magnetic microinteraction. */
+  const magneticBindings = new WeakSet();
+  function bindMagnetics() {
+    if (!isDesktop() || reducedMotion || !fineQuery.matches) return;
     document.querySelectorAll('.magnetic').forEach(el => {
-      let currentX = 0;
-      let currentY = 0;
-      let targetX = 0;
-      let targetY = 0;
-      let raf = 0;
-      let hovering = false;
-      let bounds = null;
-
-      const tick = () => {
-        currentX += (targetX - currentX) * .16;
-        currentY += (targetY - currentY) * .16;
-
-        if (Math.abs(targetX - currentX) < .01) currentX = targetX;
-        if (Math.abs(targetY - currentY) < .01) currentY = targetY;
-
-        el.style.transform = `translate3d(${currentX.toFixed(2)}px, ${currentY.toFixed(2)}px, 0)`;
-
-        const settled = Math.abs(targetX - currentX) < .02 && Math.abs(targetY - currentY) < .02;
-        if (!settled) {
-          raf = requestAnimationFrame(tick);
-        } else {
-          raf = 0;
-          if (!hovering) {
-            el.classList.remove('is-magnetic');
-            el.style.transform = '';
-          }
-        }
-      };
-
-      const startLoop = () => {
-        if (!raf) raf = requestAnimationFrame(tick);
-      };
-
-      el.addEventListener('pointerenter', () => {
-        hovering = true;
-        bounds = el.getBoundingClientRect();
-        el.classList.add('is-magnetic');
-        startLoop();
-      });
-
+      if (magneticBindings.has(el)) return;
+      magneticBindings.add(el);
       el.addEventListener('pointermove', event => {
-        const rect = bounds || el.getBoundingClientRect();
-        const dx = event.clientX - rect.left - rect.width / 2;
-        const dy = event.clientY - rect.top - rect.height / 2;
-
-        // Keep large CTAs elegant while letting compact buttons feel playful.
-        const strength = rect.width > 420 ? .035 : .14;
-        const limit = rect.width > 420 ? 10 : 8;
-        targetX = Math.max(-limit, Math.min(limit, dx * strength));
-        targetY = Math.max(-limit, Math.min(limit, dy * strength));
-        startLoop();
+        const r = el.getBoundingClientRect();
+        const x = clamp((event.clientX - r.left - r.width / 2) * .05, -5, 5);
+        const y = clamp((event.clientY - r.top - r.height / 2) * .05, -3, 3);
+        el.style.transform = `translate3d(${round(x)}px,${round(y)}px,0)`;
       });
-
-      const release = () => {
-        hovering = false;
-        bounds = null;
-        targetX = 0;
-        targetY = 0;
-        startLoop();
-      };
-
-      el.addEventListener('pointerleave', release);
-      el.addEventListener('pointercancel', release);
+      el.addEventListener('pointerleave', () => { el.style.transform = ''; });
     });
   }
 
-  // The assistant is hosted on another origin, so prompt chips copy a useful
-  // starter question and then move focus to the live assistant.
+  /* Desktop-only pointer light. It adds depth without changing layout. */
+  const spotlightBindings = new WeakSet();
+  function bindSpotlights() {
+    if (!isDesktop() || reducedMotion || !fineQuery.matches) return;
+    document.querySelectorAll('.case-card,.assistant-device,.profile-photo').forEach(el => {
+      if (spotlightBindings.has(el)) return;
+      spotlightBindings.add(el);
+      el.addEventListener('pointermove', event => {
+        const r = el.getBoundingClientRect();
+        el.style.setProperty('--pointer-x', `${round(event.clientX-r.left)}px`);
+        el.style.setProperty('--pointer-y', `${round(event.clientY-r.top)}px`);
+        el.style.setProperty('--pointer-o', '.9');
+      });
+      el.addEventListener('pointerleave', () => el.style.setProperty('--pointer-o', '0'));
+    });
+  }
+
+  /* Assistant prompt helpers. */
   document.querySelectorAll('[data-prompt-target]').forEach(button => {
     button.addEventListener('click', async () => {
-      const id = button.getAttribute('data-prompt-target');
-      const frame = document.getElementById(id);
+      const frame = document.getElementById(button.getAttribute('data-prompt-target'));
       if (!frame) return;
       const prompt = button.textContent.trim();
       const original = button.textContent;
       try {
         await navigator.clipboard.writeText(prompt);
-        button.textContent = 'Copied — paste in the assistant';
-        setTimeout(() => { button.textContent = original; }, 1200);
-      } catch (_) {
-        // Clipboard access can be blocked on some local/file deployments.
-      }
+        button.textContent = 'Copied · paste in assistant';
+        setTimeout(() => { button.textContent = original; }, 1400);
+      } catch (_) {}
       frame.focus();
-      const device = frame.closest('.assistant-device');
-      if (device && !reducedMotion) {
-        device.animate([
-          { transform: 'translateY(0) scale(1)' },
-          { transform: 'translateY(-4px) scale(1.006)' },
-          { transform: 'translateY(0) scale(1)' }
-        ], { duration: 520, easing: 'cubic-bezier(.16,1,.3,1)' });
-      }
     });
   });
+
+  document.querySelectorAll('[data-year]').forEach(el => { el.textContent = String(new Date().getFullYear()); });
+
+  /* The load entrance is intentionally brief. Scroll animation starts only
+     after the page is usable, and it is never required to reveal content. */
+  function armHero() {
+    if (!heroCopy || !heroMedia) return;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      heroCopy.classList.add('is-ready');
+      heroMedia.classList.add('is-ready');
+    }));
+  }
+
+  function measure() {
+    setMotionProfile();
+    measureScrollbar();
+    automationCards.forEach(item => {
+      if (item.path?.getTotalLength) item.length = item.path.getTotalLength();
+    });
+  }
+
+  function handleProfileChange() {
+    const changed = setMotionProfile();
+    if (changed) closeMenu();
+    measure();
+    bindMagnetics();
+    bindSpotlights();
+    requestRender();
+  }
+
+  window.addEventListener('scroll', requestRender, { passive:true });
+  window.addEventListener('resize', handleProfileChange, { passive:true });
+  window.addEventListener('orientationchange', () => setTimeout(handleProfileChange, 120), { passive:true });
+  window.visualViewport?.addEventListener('resize', handleProfileChange, { passive:true });
+  reducedMotionQuery.addEventListener?.('change', handleProfileChange);
+  coarseQuery.addEventListener?.('change', handleProfileChange);
+
+  if ('ResizeObserver' in window) {
+    const ro = new ResizeObserver(() => {
+      measure();
+      requestRender();
+    });
+    ro.observe(doc);
+  }
+
+  window.addEventListener('load', () => {
+    measure();
+    bindMagnetics();
+    bindSpotlights();
+    armHero();
+    render();
+  });
+
+  measure();
+  bindMagnetics();
+  bindSpotlights();
+  armHero();
+  render();
 })();
