@@ -70,9 +70,7 @@ The website demonstrates modern web development practices, AI integration, autom
 
 Reach out for collaborations, projects, or to connect online:
 
-* **Email:** [amirooxstar@gmail.com](mailto:amirooxstar@gmail.com)
-* **LinkedIn:** [Amir Majdi Alomari](https://www.linkedin.com/in/amir-majdi-alomari-102848297/)
-* **X (Twitter):** [@amiralomarii](https://x.com/amiralomarii)
+* **LinkedIn:** [Amir Majdi Alomari](https://www.linkedin.com/in/amir-majdi-alomari)
 * **Google Scholar:** [Profile](https://scholar.google.com/citations?user=YWD3BRsAAAAJ)
 
 ---
