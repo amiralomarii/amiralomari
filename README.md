@@ -95,8 +95,3 @@ This repository is primarily for **personal portfolio purposes**, but if you wan
 All website assets and code are © **Amir Majdi Alomari 2025**. Unauthorized use without permission is prohibited.
 
 ---
-
-```
-
-Do you want me to do that next?
-```
