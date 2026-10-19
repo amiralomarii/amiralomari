@@ -1,5 +1,14 @@
 /* The Signal v3: no framework, account, network API or cookies required. */
 (()=>{'use strict';
+  // GitHub Pages serves each directory's index.html at its clean trailing-slash URL.
+  // Normalize old bookmarks and direct links without reloading the article.
+  try {
+    const { pathname, search, hash } = window.location;
+    if (/\/index\.html$/i.test(pathname)) {
+      window.history.replaceState(window.history.state, '',
+        pathname.slice(0, -'index.html'.length) + search + hash);
+    }
+  } catch (_) { /* navigation stays usable if history is restricted */ }
   const $=selector=>document.querySelector(selector);
   const $$=selector=>[...document.querySelectorAll(selector)];
   const toggle=$('.menu-toggle'),nav=$('.mobile-nav');
