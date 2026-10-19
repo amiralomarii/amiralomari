@@ -188,6 +188,7 @@
   const hero = document.querySelector('[data-hero]');
   const heroCopy = document.querySelector('[data-hero-copy]');
   const heroMedia = document.querySelector('[data-hero-media]');
+
   const manifesto = document.querySelector('[data-manifesto]');
   const manifestoStats = [...document.querySelectorAll('.manifesto-stats article')];
   const workIntro = document.querySelector('.work-intro');
@@ -387,19 +388,47 @@
 
   function renderProcess() {
     if (!processScene || !processCards.length) return;
-    const p = travelProgress(processScene, .9, .12);
+    const vh = viewportHeight();
+    const track = processScene.querySelector('[data-horizontal-track]');
+    if (!track) return;
+    const bounds = track.getBoundingClientRect();
+    const n = processCards.length;
+    const inView = bounds.bottom > vh * .15 && bounds.top < vh * .85;
+    let p, current;
+
+    if (isMobile()) {
+      /* On phones the cards are stacked: highlight each actual card as it
+         crosses the reading zone, not according to the section's total size. */
+      const focusY = vh * .46;
+      current = processCards.findIndex(card => {
+        const r = card.getBoundingClientRect();
+        return r.top <= focusY && r.bottom >= focusY;
+      });
+      if (current < 0) {
+        current = processCards.reduce((best, card, i) => {
+          const r = card.getBoundingClientRect();
+          const distance = Math.abs((r.top + r.bottom) * .5 - focusY);
+          return distance < best.distance ? {index:i, distance} : best;
+        }, {index:0, distance:Infinity}).index;
+      }
+      p = (current + .5) / n;
+    } else {
+      /* Start step 01 only as the cards enter the usable reading area and
+         reach step 04 while the last card is still visible. */
+      const start = vh * .72;
+      const end = vh * .30 - bounds.height;
+      p = clamp((start - bounds.top) / Math.max(1, start - end));
+      current = Math.min(n - 1, Math.floor(p * n));
+    }
+
     processScene.style.setProperty('--process-p', String(round(p,4)));
     setIndexPulse(processScene, viewportFocus(processScene));
-
-    const n = processCards.length;
-    let current = Math.min(n - 1, Math.max(0, Math.floor(p * n)));
-    if (p >= .995) current = n - 1;
     processCards.forEach((card,i) => {
       const center = (i + .5) / n;
       const local = clamp(1 - Math.abs(p - center) * n * 1.25);
-      const passed = p >= (i + 1) / n - .015;
+      const passed = i < current || (p >= 1 && !inView);
       card.classList.toggle('is-passed', passed);
-      card.classList.toggle('is-current', i === current && p < 1);
+      card.classList.toggle('is-current', i === current && inView);
       card.style.setProperty('--process-card-y', `${round((1-local) * (isDesktop() ? 8 : 3))}px`);
       card.style.setProperty('--process-card-r', `${round((i%2?1:-1) * local * (isDesktop()? .45:.15),3)}deg`);
       card.style.setProperty('--process-card-glow', String(round(.35 + local*.55,3)));
@@ -417,22 +446,10 @@
     setIndexPulse(assistantScene, focus);
     if (reducedMotion) return;
 
-    if (isDesktop()) {
-      assistantCopy?.style.setProperty('--assistant-copy-x', `${round(-signed * 16)}px`);
-      assistantDevice?.style.setProperty('--assistant-device-x', `${round(signed * 18)}px`);
-      assistantDevice?.style.setProperty('--assistant-device-y', `${round(signed * 10)}px`);
-      assistantDevice?.style.setProperty('--assistant-device-r', `${round(signed * .42,3)}deg`);
-    } else if (isTablet()) {
-      assistantCopy?.style.setProperty('--assistant-copy-x', '0px');
-      assistantDevice?.style.setProperty('--assistant-device-x', '0px');
-      assistantDevice?.style.setProperty('--assistant-device-y', `${round(signed * 8)}px`);
-      assistantDevice?.style.setProperty('--assistant-device-r', '0deg');
-    } else {
-      assistantCopy?.style.setProperty('--assistant-copy-x', '0px');
-      assistantDevice?.style.setProperty('--assistant-device-x', '0px');
-      assistantDevice?.style.setProperty('--assistant-device-y', '0px');
-      assistantDevice?.style.setProperty('--assistant-device-r', '0deg');
-    }
+    // Keep the live iframe on a stable, untransformed pixel grid. The adjacent
+    // editorial copy can still respond to scrolling without rasterizing chat text.
+    assistantCopy?.style.setProperty('--assistant-copy-x',
+      isDesktop() ? `${round(-signed * 16)}px` : '0px');
   }
 
   function renderProfile() {

@@ -581,3 +581,37 @@ html{scrollbar-width:thin;scrollbar-color:#b7b6b0 #f5f3ed}
   @keyframes portfolio-page-in {from {opacity:.7; transform:translateY(7px)}to {opacity:1;transform:translateY(0)}}
 }
 @media (prefers-reduced-motion: reduce) {::view-transition-old(root),::view-transition-new(root){animation-duration:.01ms!important}}
+
+
+/* Hero artwork: editorial landscape presentation on desktop/tablet.
+   The original, narrower mobile framing stays intact. */
+@media (min-width:721px){
+  .hero-media{
+    width:100%;height:auto;aspect-ratio:1.18 / 1;
+    min-height:0;max-height:none;justify-self:stretch;
+  }
+  .hero-media::before{display:none}
+  .hero-media__frame{width:100%;height:100%;aspect-ratio:auto}
+  .hero-media__frame img{
+    width:100%;height:100%;object-fit:cover;object-position:center 42%;
+    transform:none!important;will-change:auto;
+  }
+}
+
+/* The embedded chatbot must remain pixel-aligned. Scroll-driven 3D movement
+   and rotation on an iframe ancestor can cause browser bitmap resampling. */
+.assistant-device,
+.assistant-device.is-inview{
+  transform:none!important;
+  will-change:auto;
+}
+.assistant-device::after{display:none!important}
+.device-screen iframe{display:block;transform:none!important;filter:none!important}
+
+/* Three professional contact links: two balanced tiles and a full-width
+   company link, reusing the existing link styling and hover treatment. */
+.profile-links a:last-child{
+  grid-column:1 / -1;
+  border-right:0;
+  padding-left:8px;
+}
