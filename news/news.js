@@ -50,7 +50,9 @@
     $$('[data-bookmark]').forEach(b=>{
       const has=saved.includes(b.dataset.bookmark);b.setAttribute('aria-pressed',String(has));
       b.classList.toggle('is-saved',has);
-      b.textContent=b.classList.contains('news-bookmark')?(has?'★':'☆'):(has?'★ Saved':'☆ Save story');
+      const label=b.querySelector('.signal-button-label');
+      if(label)label.textContent=has?'Saved':'Save story';
+      else if(!b.classList.contains('news-bookmark'))b.textContent=has?'Saved':'Save story';
     });
     const count=$('#saved-count');if(count)count.textContent=String(saved.length);
   };
@@ -145,16 +147,17 @@
     $$('[data-share]').forEach(a=>{if(Object.prototype.hasOwnProperty.call(links,a.dataset.share))a.href=links[a.dataset.share];});
     const opts=$('#share-options'),trigger=$('#share-trigger');
     trigger?.addEventListener('click',()=>{
-      const open=!opts?.classList.contains('is-open');opts?.classList.toggle('is-open',open);
-      trigger.setAttribute('aria-expanded',String(open));
+      if(window.theSignalShare)window.theSignalShare(trigger);
+      else if(navigator.share)navigator.share({title:shareTitle,url:shareUrl}).catch(()=>{});
     });
     async function copy(button){
       let success=false;
       if(navigator.clipboard&&window.isSecureContext){try{await navigator.clipboard.writeText(shareUrl);success=true;}catch(_){}}
       if(!success){const t=document.createElement('textarea');t.value=shareUrl;t.style.position='fixed';t.style.opacity='0';document.body.appendChild(t);t.select();try{success=document.execCommand('copy');}catch(_){}t.remove();}
-      const prior=button.textContent;
-      button.textContent=success?'✓ Link copied':'Select the URL in the address bar';
-      window.setTimeout(()=>{button.textContent=prior;},2600);
+      const label=button.querySelector('.signal-button-label')||button;
+      const prior=label.textContent;
+      label.textContent=success?'Link copied':'Copy the address bar URL';
+      window.setTimeout(()=>{label.textContent=prior;},2600);
     }
     const copyTop=$('#copy-trigger');copyTop?.addEventListener('click',()=>copy(copyTop));
     const copyBottom=$('[data-copy-bottom]');copyBottom?.addEventListener('click',()=>copy(copyBottom));
@@ -177,14 +180,9 @@
     if(img.complete&&img.naturalWidth===0)fallback();
   });
   const share=document.querySelector('#v4-native-share');
-  share?.addEventListener('click',async()=>{
-    const url=document.body.dataset.shareUrl||location.href;
-    const title=document.body.dataset.shareTitle||document.title;
-    if(navigator.share){try{await navigator.share({title,text:title,url});return;}catch(e){if(e.name==='AbortError')return;}}
-    const opts=document.querySelector('#share-options');
-    const trigger=document.querySelector('#share-trigger');
-    if(opts&&trigger){opts.classList.add('is-open');trigger.setAttribute('aria-expanded','true');trigger.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'center'});return;}
-    if(navigator.clipboard){try{await navigator.clipboard.writeText(url);share.textContent='Link copied ✓';setTimeout(()=>share.textContent='Share ↗',2200);}catch(e){location.hash='#share-trigger';}}
+  share?.addEventListener('click',()=>{
+    if(window.theSignalShare)window.theSignalShare(share);
+    else if(navigator.share)navigator.share({title:document.body.dataset.shareTitle||document.title,url:document.body.dataset.shareUrl||location.href}).catch(()=>{});
   });
   document.querySelector('#v4-back-top')?.addEventListener('click',()=>window.scrollTo({top:0,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'}));
 })();
