@@ -1,5 +1,5 @@
 /* The Signal v7: image-fit, source readability, motion and editorial treatment only. */
-.news-page.signal-v6{--v7-soft:#e9e6de;--v7-blue:#355cff}
+.news-page.signal-v6{--v7-soft:#e9e6de;--v7-blue:#B16B52}
 .news-page.signal-v6 :is(.news-card__image,.news-pick,.news-lead__media){isolation:isolate}
 /* Never crop the delivered original. Fill excess space with a subtle, source-matched
    ambient image rather than gray bands, stretched proportions or excessive padding. */
@@ -37,23 +37,23 @@
 .news-page.signal-v6.article-page .article-sources>p{font-size:13px;max-width:60ch;margin:0 0 18px;color:#686b70}
 .news-page.signal-v6.article-page .article-sources ol{counter-reset:source;list-style:none;margin:0;padding:0;display:grid;gap:7px}
 .news-page.signal-v6.article-page .article-sources li{padding:0!important;border:0!important;counter-increment:source}
-.news-page.signal-v6.article-page .article-sources a{background:#ebe9e3;border:1px solid #dbd8d0;border-radius:10px;padding:14px 17px;display:grid;grid-template-columns:minmax(0,1fr) 18px;gap:12px;align-items:center;font-weight:650;font-size:13px;line-height:1.5;color:#28323e!important;text-decoration:none!important;transition:background .22s,border-color .22s,transform .22s}
-.news-page.signal-v6.article-page .article-sources a:hover{background:#f7f6f2;border-color:#b5c1e1;transform:translateX(2px)}
+.news-page.signal-v6.article-page .article-sources a{background:#ebe9e3;border:1px solid #dbd8d0;border-radius:10px;padding:14px 17px;display:grid;grid-template-columns:minmax(0,1fr) 18px;gap:12px;align-items:center;font-weight:650;font-size:13px;line-height:1.5;color:#202022!important;text-decoration:none!important;transition:background .22s,border-color .22s,transform .22s}
+.news-page.signal-v6.article-page .article-sources a:hover{background:#f7f6f2;border-color:#E4DBD3;transform:translateX(2px)}
 .news-page.signal-v6.article-page .article-sources a span:last-child{font-size:18px}
 /* Less uniform reading rhythm: accents are theme-aware, not generic bordered blue boxes. */
-.news-page.signal-v6.article-page .article-section>p strong{font-weight:800;color:#1d2530}
-.news-page.signal-v6.article-page .article-section>p:first-of-type{font-size:calc(var(--reader-size,17px) + 1px);line-height:1.85;color:#2b3038}
+.news-page.signal-v6.article-page .article-section>p strong{font-weight:800;color:#202022}
+.news-page.signal-v6.article-page .article-section>p:first-of-type{font-size:calc(var(--reader-size,17px) + 1px);line-height:1.85;color:#202022}
 .news-page.signal-v6.article-page .article-body{max-width:850px}
 .news-page.signal-v6.article-page .article-fast-read{border:none!important;border-left:3px solid var(--v6-accent)!important;background:var(--v6-pale)!important;border-radius:3px 13px 13px 3px}
 .news-page.signal-v6.article-page .article-fast-read p{max-width:46ch}
 .news-page.signal-v6.article-page .article-explained{border-top:1px solid #d4d1c8;border-bottom:1px solid #d4d1c8;margin:55px 0;padding:30px 0}
-.news-page.signal-v6.article-page [data-editorial-layout='research-notebook'] .article-explained{background:#e8f0eb;border:0;padding:25px 32px;border-radius:13px}
-.news-page.signal-v6.article-page [data-editorial-layout='research-notebook'] .article-highlights{background:#eff1ec!important;border-color:#cad5cf!important}
+.news-page.signal-v6.article-page [data-editorial-layout='research-notebook'] .article-explained{background:#F2EEEA;border:0;padding:25px 32px;border-radius:13px}
+.news-page.signal-v6.article-page [data-editorial-layout='research-notebook'] .article-highlights{background:#F2EEEA!important;border-color:#E4DBD3!important}
 .news-page.signal-v6.article-page [data-editorial-layout='field-guide'] .article-highlights{background:#efeae2!important;border-color:#ddd0be!important;border-radius:2px 14px 14px 2px!important;border-left:4px solid var(--v6-accent)!important}
 .news-page.signal-v6.article-page [data-editorial-layout='field-guide'] .article-explained{background:none;border-block:2px solid #c9c6bf;border-radius:0;padding:25px 0}
-.news-page.signal-v6.article-page [data-editorial-layout='visual-feature'] .article-highlights{background:#f0e9ef!important;border-color:#e3d5e0!important}
-.news-page.signal-v6.article-page [data-editorial-layout='technical-brief'] .article-highlights{background:#e7efed!important;border-color:#d2dfdb!important}
-.news-page.signal-v6.article-page [data-editorial-layout='model-explainer'] .article-highlights{background:#e9ecfa!important;border-color:#ced6f2!important}
+.news-page.signal-v6.article-page [data-editorial-layout='visual-feature'] .article-highlights{background:#f0e9ef!important;border-color:#E4DBD3!important}
+.news-page.signal-v6.article-page [data-editorial-layout='technical-brief'] .article-highlights{background:#F2EEEA!important;border-color:#E4DBD3!important}
+.news-page.signal-v6.article-page [data-editorial-layout='model-explainer'] .article-highlights{background:#F2EEEA!important;border-color:#E4DBD3!important}
 /* Selected category and grid reveal feel responsive without dramatic motion. */
 .news-page.signal-v6 .news-filter{transition:background-color .30s ease,color .30s ease,border-color .30s ease,transform .22s ease,box-shadow .30s ease}
 .news-page.signal-v6 .news-filter:hover{transform:translateY(-1px);border-color:#9b9a97}

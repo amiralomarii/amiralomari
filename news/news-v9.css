@@ -56,7 +56,7 @@
   font-size:11px;
   font-weight:750;
   letter-spacing:.08em;
-  color:#5a636d;
+  color:#81736A;
   margin-bottom:11px;
 }
 .news-page.signal-v6 .news-picks__heading h2{
@@ -65,7 +65,7 @@
   font-size:clamp(33px,3.7vw,54px)!important;
   line-height:1.08!important;
   letter-spacing:-.065em;
-  color:#15171c;
+  color:#202022;
 }
 .news-page.signal-v6 .news-picks__heading p{
   margin:0 0 4px!important;
@@ -112,7 +112,7 @@
   object-fit:cover!important;
   object-position:center!important;
   border-radius:0!important;
-  background:#e2e7e8!important;
+  background:#E4DBD3!important;
   padding:0!important;
   margin:0!important;
   filter:none!important;
@@ -130,7 +130,7 @@
 }
 .news-page.signal-v6 .news-pick__text .news-mono{
   font:700 10px/1.5 'IBM Plex Mono',monospace!important;
-  color:#355cff!important;
+  color:#B16B52!important;
   letter-spacing:.035em!important;
   margin-bottom:12px;
 }
@@ -142,7 +142,7 @@
   letter-spacing:-.055em!important;
   padding:0!important;
   margin:0 0 11px!important;
-  color:#16191d;
+  color:#202022;
 }
 .news-page.signal-v6 .news-pick small{
   display:block;
@@ -157,7 +157,7 @@
   font-size:12px;
   font-weight:800;
   letter-spacing:-.01em;
-  color:#22272b;
+  color:#202022;
 }
 .news-page.signal-v6 .news-pick__arrow{
   display:grid;place-items:center;
@@ -167,11 +167,11 @@
   border-radius:50%;
   border:1px solid #d3d2cc;
   background:#fff;
-  color:#20252c!important;
+  color:#202022!important;
   font-size:19px!important;
   transition:background .25s,border-color .25s,color .25s,transform .25s;
 }
-.news-page.signal-v6 .news-pick:hover .news-pick__arrow{transform:translate(2px,-2px);background:#16191d;border-color:#16191d;color:white!important}
+.news-page.signal-v6 .news-pick:hover .news-pick__arrow{transform:translate(2px,-2px);background:#202022;border-color:#202022;color:white!important}
 .news-page.signal-v6 .news-editorial{padding-top:78px!important}
 
 /* Reduced motion keeps every card, image and link usable. */
